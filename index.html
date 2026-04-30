@@ -261,7 +261,7 @@ input:checked+.tsl::before{transform:translateX(17px);}
   <div class="s1-top">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <div class="s1-title">학생 명단</div>
-      <input id="inputSchool" class="fi" style="width:130px;padding:6px 10px;font-size:12.5px;" placeholder="학교명" value="도개중고등학교"/>
+      <input id="inputSchool" class="fi" style="width:130px;padding:6px 10px;font-size:12.5px;" placeholder="학교명 (선택)"/>
       <input id="inputClass" class="fi" style="width:110px;padding:6px 10px;font-size:12.5px;" placeholder="예) 1학년 3반"/>
     </div>
     <div style="display:flex;align-items:center;gap:10px;">
@@ -367,7 +367,7 @@ input:checked+.tsl::before{transform:translateX(17px);}
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         제목 클릭 시 수정 가능
       </div>
-      <div id="s3school" contenteditable="true" spellcheck="false" style="font-size:clamp(13px,2vw,20px);font-weight:900;color:var(--navy);outline:none;cursor:text;border-radius:6px;padding:2px 6px;display:inline-block;" onfocus="this.style.background='var(--navy-pale)'" onblur="this.style.background='transparent'">도개중고등학교</div>
+      <div id="s3school" contenteditable="true" spellcheck="false" style="font-size:clamp(13px,2vw,20px);font-weight:900;color:var(--navy);outline:none;cursor:text;border-radius:6px;padding:2px 6px;display:inline-block;" onfocus="this.style.background='var(--navy-pale)'" onblur="this.style.background='transparent'"></div>
       <br>
       <div id="s3class" contenteditable="true" spellcheck="false" style="font-size:clamp(18px,3.5vw,36px);font-weight:900;color:var(--navy-dark);outline:none;cursor:text;border-radius:6px;padding:2px 8px;display:inline-block;" onfocus="this.style.background='var(--navy-pale)'" onblur="this.style.background='transparent'"></div>
       <div style="font-size:clamp(11px,1.3vw,13px);color:var(--muted);font-weight:500;margin-top:5px;">교사 시점 (교탁에서 바라본 배치도)</div>
@@ -613,7 +613,7 @@ function goToS2(){
   var valid=students.filter(function(s){return!s.absent&&s.name;});
   if(!valid.length){alert('학생 이름을 하나 이상 입력해주세요.');return;}
   /* 학교명/학반 동기화 */
-  var school=document.getElementById('inputSchool').value.trim()||'도개중고등학교';
+  var school=document.getElementById('inputSchool').value.trim();
   var cls=document.getElementById('inputClass').value.trim()||valid.length+'명 배치';
   document.getElementById('s3school').textContent=school;
   document.getElementById('s3class').textContent=cls;
@@ -991,14 +991,14 @@ function buildImageCanvas(isTeacher,cmt){
   var cmtY=(isTeacher?boardY:gridStartY+gridH)+BOARD_H+10;
   var dateY=cmtY+CMT_H+10;
   /* 시점 전환 */
-  /* 화면과 동일: 행만 역순, 열은 정방향 유지 */
-  var fCG=cgArr;
+  /* 교사 시점: 행 역순+열 정방향 / 학생 시점: 교사의 180° 회전 = 행 정방향+열 역순 */
+  var fCG=isTeacher?cgArr:cgArr.map(function(cg){return cols-cg;}).sort(function(a,b){return a-b;});
   var fRG=isTeacher?rgArr.map(function(rg){return rows-rg;}).sort(function(a,b){return a-b;}):rgArr;
   var flipped=[];
   if(isTeacher){
     for(var r=rows-1;r>=0;r--){var row2=[];for(var c=0;c<cols;c++) row2.push(layout[r][c]);flipped.push(row2);}
   } else {
-    for(var r=0;r<rows;r++){var row2=[];for(var c=0;c<cols;c++) row2.push(layout[r][c]);flipped.push(row2);}
+    for(var r=0;r<rows;r++){var row2=[];for(var c=cols-1;c>=0;c--) row2.push(layout[r][c]);flipped.push(row2);}
   }
   var canvas=document.createElement('canvas');
   canvas.width=A4W;canvas.height=A4H;
@@ -1078,8 +1078,60 @@ function roundRect(ctx,x,y,w,h,r,fill,stroke){ctx.beginPath();ctx.moveTo(x+r,y);
 });
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){['specialModal','commentModal','previewModal'].forEach(function(id){document.getElementById(id).classList.remove('active');});}});
 
-/* 초기화 */
-buildStudentRows(null);
+/* ──────────── 로컬 저장 ──────────── */
+var STORAGE_KEY='seatDraw_data_v1';
+function saveLocal(){
+  try {
+    var data={
+      students:collectStudents(),
+      count:studentCount,
+      cols:document.getElementById('sCols').value,
+      rows:document.getElementById('sRows').value,
+      school:document.getElementById('inputSchool').value,
+      cls:document.getElementById('inputClass').value,
+      colGaps:Array.from(colGaps),
+      rowGaps:Array.from(rowGaps),
+      emptySeats:Array.from(emptySeats),
+      pairs:pairs,
+      avoids:avoids,
+      prefZones:prefZones
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch(e){console.warn('localStorage 저장 실패:',e);}
+}
+function loadLocal(){
+  try {
+    var raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    var d=JSON.parse(raw);
+    if(d.count){studentCount=d.count;document.getElementById('countVal').value=d.count;}
+    if(d.cols) document.getElementById('sCols').value=d.cols;
+    if(d.rows) document.getElementById('sRows').value=d.rows;
+    if(d.school) document.getElementById('inputSchool').value=d.school;
+    if(d.cls) document.getElementById('inputClass').value=d.cls;
+    if(d.colGaps) colGaps=new Set(d.colGaps);
+    if(d.rowGaps) rowGaps=new Set(d.rowGaps);
+    if(d.emptySeats) emptySeats=new Set(d.emptySeats);
+    if(d.pairs) pairs=d.pairs;
+    if(d.avoids) avoids=d.avoids;
+    if(d.prefZones) prefZones=d.prefZones;
+    if(d.students&&d.students.length) buildStudentRows(d.students);
+    else buildStudentRows(null);
+    return true;
+  } catch(e){console.warn('localStorage 불러오기 실패:',e); return false;}
+}
+/* 자동 저장 트리거: 학생 명단/입력란 변경 시 */
+document.addEventListener('input',function(e){
+  if(e.target.matches('.stu-name, #inputSchool, #inputClass, #sCols, #sRows, #countVal')) saveLocal();
+});
+document.addEventListener('click',function(e){
+  if(e.target.matches('.g-btn, .role-btn, .rp-item, .pv-cell, .pv-col-gap, .pv-row-gap-cell, .cnt-btn')){
+    setTimeout(saveLocal,50);
+  }
+});
+
+/* 초기화: 저장된 데이터 복원, 없으면 빈 명단 */
+if(!loadLocal()) buildStudentRows(null);
 </script>
 </body>
 </html>
