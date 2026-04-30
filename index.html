@@ -259,7 +259,11 @@ input:checked+.tsl::before{transform:translateX(17px);}
 <!-- ━━ S1: 학생 명단 ━━ -->
 <div class="screen active" id="s1">
   <div class="s1-top">
-    <div class="s1-title" id="s1title">학생 명단</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div class="s1-title">학생 명단</div>
+      <input id="inputSchool" class="fi" style="width:130px;padding:6px 10px;font-size:12.5px;" placeholder="학교명" value="도개중고등학교"/>
+      <input id="inputClass" class="fi" style="width:110px;padding:6px 10px;font-size:12.5px;" placeholder="예) 1학년 3반"/>
+    </div>
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="count-box">
         <label>학생 수</label>
@@ -608,6 +612,12 @@ function goToS2(){
   students=collectStudents();
   var valid=students.filter(function(s){return!s.absent&&s.name;});
   if(!valid.length){alert('학생 이름을 하나 이상 입력해주세요.');return;}
+  /* 학교명/학반 동기화 */
+  var school=document.getElementById('inputSchool').value.trim()||'도개중고등학교';
+  var cls=document.getElementById('inputClass').value.trim()||valid.length+'명 배치';
+  document.getElementById('s3school').textContent=school;
+  document.getElementById('s3class').textContent=cls;
+  document.getElementById('s3badge').textContent=cls;
   goScreen('s2');
   requestAnimationFrame(function(){setTimeout(buildPreview,80);});
 }
@@ -981,11 +991,15 @@ function buildImageCanvas(isTeacher,cmt){
   var cmtY=(isTeacher?boardY:gridStartY+gridH)+BOARD_H+10;
   var dateY=cmtY+CMT_H+10;
   /* 시점 전환 */
-  var fCG=isTeacher?cgArr.map(function(cg){return cols-cg;}).sort(function(a,b){return a-b;}):cgArr;
+  /* 화면과 동일: 행만 역순, 열은 정방향 유지 */
+  var fCG=cgArr;
   var fRG=isTeacher?rgArr.map(function(rg){return rows-rg;}).sort(function(a,b){return a-b;}):rgArr;
   var flipped=[];
-  if(isTeacher){for(var r=rows-1;r>=0;r--){var row2=[];for(var c=cols-1;c>=0;c--) row2.push(layout[r][c]);flipped.push(row2);}}
-  else{for(var r=0;r<rows;r++){var row2=[];for(var c=0;c<cols;c++) row2.push(layout[r][c]);flipped.push(row2);}}
+  if(isTeacher){
+    for(var r=rows-1;r>=0;r--){var row2=[];for(var c=0;c<cols;c++) row2.push(layout[r][c]);flipped.push(row2);}
+  } else {
+    for(var r=0;r<rows;r++){var row2=[];for(var c=0;c<cols;c++) row2.push(layout[r][c]);flipped.push(row2);}
+  }
   var canvas=document.createElement('canvas');
   canvas.width=A4W;canvas.height=A4H;
   var ctx=canvas.getContext('2d');
