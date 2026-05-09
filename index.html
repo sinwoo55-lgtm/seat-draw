@@ -690,17 +690,17 @@ function openSpecialModal(){
   document.getElementById('specialModal').classList.add('active');
 }
 function closeSpecialModal(){document.getElementById('specialModal').classList.remove('active');}
-function saveSpecial(){closeSpecialModal();showToast('특수 설정 저장됨 ✓');}
+function saveSpecial(){saveLocal();closeSpecialModal();showToast('특수 설정 저장됨 ✓');}
 function switchTab(name,btn){
   document.querySelectorAll('.spec-tab-content').forEach(function(el){el.classList.remove('on');});
   document.getElementById('tab-'+name).classList.add('on');
   document.querySelectorAll('.spec-tab').forEach(function(b){b.classList.remove('on');});
   btn.classList.add('on');
 }
-function addPair(){var a=document.getElementById('pairA').value.trim(),b=document.getElementById('pairB').value.trim();if(!a||!b)return;pairs.push({a,b});document.getElementById('pairA').value='';document.getElementById('pairB').value='';renderPairList();}
-function renderPairList(){document.getElementById('pairList').innerHTML=pairs.map(function(p,i){return '<div class="chip-item">🔗 '+esc(p.a)+' ↔ '+esc(p.b)+'<button class="chip-x" onclick="pairs.splice('+i+',1);renderPairList()">×</button></div>';}).join('');}
-function addAvoid(){var a=document.getElementById('avoidA').value.trim(),b=document.getElementById('avoidB').value.trim(),lv=parseInt(document.getElementById('avoidLv').value);if(!a||!b)return;avoids.push({a,b,level:lv});document.getElementById('avoidA').value='';document.getElementById('avoidB').value='';renderAvoidList();}
-function renderAvoidList(){var lbl=['','약','중','강'];document.getElementById('avoidList').innerHTML=avoids.map(function(av,i){return '<div class="chip-item">🚷 '+esc(av.a)+' ↔ '+esc(av.b)+' ['+lbl[av.level]+']<button class="chip-x" onclick="avoids.splice('+i+',1);renderAvoidList()">×</button></div>';}).join('');}
+function addPair(){var a=document.getElementById('pairA').value.trim(),b=document.getElementById('pairB').value.trim();if(!a||!b)return;pairs.push({a,b});document.getElementById('pairA').value='';document.getElementById('pairB').value='';renderPairList();saveLocal();}
+function renderPairList(){document.getElementById('pairList').innerHTML=pairs.map(function(p,i){return '<div class="chip-item">🔗 '+esc(p.a)+' ↔ '+esc(p.b)+'<button class="chip-x" onclick="pairs.splice('+i+',1);renderPairList();saveLocal()">×</button></div>';}).join('');}
+function addAvoid(){var a=document.getElementById('avoidA').value.trim(),b=document.getElementById('avoidB').value.trim(),lv=parseInt(document.getElementById('avoidLv').value);if(!a||!b)return;avoids.push({a,b,level:lv});document.getElementById('avoidA').value='';document.getElementById('avoidB').value='';renderAvoidList();saveLocal();}
+function renderAvoidList(){var lbl=['','약','중','강'];document.getElementById('avoidList').innerHTML=avoids.map(function(av,i){return '<div class="chip-item">🚷 '+esc(av.a)+' ↔ '+esc(av.b)+' ['+lbl[av.level]+']<button class="chip-x" onclick="avoids.splice('+i+',1);renderAvoidList();saveLocal()">×</button></div>';}).join('');}
 function buildZoneMiniGrid(){
   var rows=parseInt(document.getElementById('sRows').value)||5;
   var cols=parseInt(document.getElementById('sCols').value)||6;
@@ -720,8 +720,8 @@ function toggleZoneRow(r,cols){var allOn=true;for(var c=1;c<=cols;c++)if(!zoneSe
 function toggleZoneCol(col,rows){var allOn=true;for(var r=1;r<=rows;r++)if(!zoneSel.has(col+'-'+r)){allOn=false;break;}for(var r=1;r<=rows;r++){var k=col+'-'+r;if(allOn)zoneSel.delete(k);else zoneSel.add(k);}buildZoneMiniGrid();}
 function zoneAll(){var rows=parseInt(document.getElementById('sRows').value)||5,cols=parseInt(document.getElementById('sCols').value)||6;for(var r=1;r<=rows;r++)for(var c=1;c<=cols;c++)zoneSel.add(c+'-'+r);buildZoneMiniGrid();}
 function zoneClear(){zoneSel.clear();buildZoneMiniGrid();}
-function addPref(){var name=document.getElementById('prefName').value.trim();if(!name){alert('학생 이름을 입력하세요');return;}if(!zoneSel.size){alert('구역을 선택하세요');return;}prefZones.push({name,cells:Array.from(zoneSel)});document.getElementById('prefName').value='';zoneSel.clear();renderPrefList();buildZoneMiniGrid();}
-function renderPrefList(){document.getElementById('prefList').innerHTML=prefZones.map(function(p,i){return '<div class="chip-item">🎯 '+esc(p.name)+' → '+p.cells.length+'칸 지정<button class="chip-x" onclick="prefZones.splice('+i+',1);renderPrefList()">×</button></div>';}).join('');}
+function addPref(){var name=document.getElementById('prefName').value.trim();if(!name){alert('학생 이름을 입력하세요');return;}if(!zoneSel.size){alert('구역을 선택하세요');return;}prefZones.push({name,cells:Array.from(zoneSel)});document.getElementById('prefName').value='';zoneSel.clear();renderPrefList();buildZoneMiniGrid();saveLocal();}
+function renderPrefList(){document.getElementById('prefList').innerHTML=prefZones.map(function(p,i){return '<div class="chip-item">🎯 '+esc(p.name)+' → '+p.cells.length+'칸 지정<button class="chip-x" onclick="prefZones.splice('+i+',1);renderPrefList();saveLocal()">×</button></div>';}).join('');}
 
 /* ──────────── 셀 메뉴 ──────────── */
 var menuCell={r:0,c:0};
