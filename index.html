@@ -743,68 +743,141 @@ function generateLayout(){
   var validSeats=[];
   for(var r=1;r<=rows;r++) for(var c=1;c<=cols;c++) if(!emptySeats.has(c+'-'+r)) validSeats.push({r,c});
   if(active.length>validSeats.length){alert('학생 수('+active.length+'명) > 유효 자리('+validSeats.length+'개)');return;}
-  var best=null,bestScore=-Infinity;
-  for(var sim=0;sim<1500;sim++){
-    var g=runSim(active,validSeats,rows,cols,genderSep);
-    if(!g) continue;
-    var sc=evalScore(g,active,rows,cols);
-    if(sc>bestScore){bestScore=sc;best=JSON.parse(JSON.stringify(g));}
-  }
-  if(!best){alert('배치 불가. 조건을 줄여보세요.');return;}
-  layout=best;
-  /* S3 타이틀 */
-  document.getElementById('s3badge').textContent='배치표';
-  document.getElementById('s3class').textContent=classLabel();
-  goScreen('s3');
-  applyTheme(curTheme);
-  requestAnimationFrame(function(){setTimeout(function(){renderSeatGrid();},80);});
+  showToast('🎲 배치 중...');
+  setTimeout(function(){
+    var best=null,bestScore=-Infinity;
+    for(var sim=0;sim<1500;sim++){
+      var g=runSim(active,validSeats,rows,cols,genderSep);
+      if(!g) continue;
+      var sc=evalScore(g,active,rows,cols);
+      if(sc>bestScore){bestScore=sc;best=JSON.parse(JSON.stringify(g));}
+    }
+    if(!best){alert('제약 조건이 너무 많아 배치가 불가능해요. 조건을 줄여주세요.');return;}
+    /* 그리드의 이름 문자열을 학생 객체로 변환 (renderSeatGrid가 객체 기대) */
+    for(var r=0;r<rows;r++) for(var c=0;c<cols;c++){
+      var v=best[r][c];
+      if(v&&v!=='EMPTY'&&typeof v==='string'){
+        var stu=active.find(function(s){return s.name===v;});
+        if(stu) best[r][c]=stu;
+      }
+    }
+    layout=best;
+    /* S3 타이틀 */
+    var school=document.getElementById('inputSchool').value.trim();
+    var cls=document.getElementById('inputClass').value.trim()||(active.length+'명 배치');
+    if(school) document.getElementById('s3school').textContent=school;
+    document.getElementById('s3class').textContent=cls;
+    document.getElementById('s3badge').textContent=cls;
+    goScreen('s3');
+    applyTheme(curTheme);
+    requestAnimationFrame(function(){setTimeout(function(){renderSeatGrid();},80);});
+    showToast('✅ 배치 완료!');
+  },50);
 }
 function classLabel(){
   /* classInput이 없으므로 학급 정보를 배지에 단순 표시 */
   return students.length>0?students.length+'명 배치':'배치표';
 }
 function runSim(active,valid,rows,cols,genderSep){
+  /* 우선순위: 빈자리 → 단일셀 선호구역 → 짝 → 다중셀 선호구역 → 남녀분리 → 나머지 랜덤 */
   var g=[];
   for(var r=0;r<rows;r++){g.push([]);for(var c=0;c<cols;c++) g[r].push(null);}
-  emptySeats.forEach(function(k){var p=k.split('-');g[parseInt(p[1])-1][parseInt(p[0])-1]='EMPTY';});
-  var used=new Set();
-  var remaining=shuffle(active.slice());
-  var free=shuffle(valid.filter(function(s){return g[s.r-1][s.c-1]===null;}));
-  /* 짝 고정 */
-  var pplaced=new Set();
-  pairs.forEach(function(pair){
-    var sA=remaining.find(function(s){return s.name===pair.a;}),sB=remaining.find(function(s){return s.name===pair.b;});
-    if(!sA||!sB) return;
-    for(var i=0;i<free.length-1;i++){var s1=free[i],s2=free[i+1];if(g[s1.r-1][s1.c-1]||g[s2.r-1][s2.c-1]) continue;if(s1.r===s2.r&&Math.abs(s1.c-s2.c)===1){g[s1.r-1][s1.c-1]=sA;g[s2.r-1][s2.c-1]=sB;pplaced.add(sA.name);pplaced.add(sB.name);break;}}
+  /* 1) 빈 자리 마킹 */
+  emptySeats.forEach(function(k){
+    var p=k.split('-'); var c=parseInt(p[0])-1, r=parseInt(p[1])-1;
+    if(r>=0&&r<rows&&c>=0&&c<cols) g[r][c]='EMPTY';
   });
-  /* 선호 구역 */
-  var zplaced=new Set();
+  var placed=new Set();
+  /* 2) 단일 셀 선호구역 - 최우선 (고정 좌석 역할) */
   prefZones.forEach(function(pz){
-    var s=remaining.find(function(st){return st.name===pz.name&&!pplaced.has(st.name)&&!zplaced.has(st.name);});
-    if(!s) return;
-    var cs=new Set(pz.cells);
-    var zf=free.filter(function(seat){return cs.has(seat.c+'-'+seat.r)&&g[seat.r-1][seat.c-1]===null;});
-    if(zf.length){g[zf[0].r-1][zf[0].c-1]=s;zplaced.add(s.name);}
+    if(pz.cells.length!==1||placed.has(pz.name)) return;
+    var p=pz.cells[0].split('-'),c=parseInt(p[0])-1,r=parseInt(p[1])-1;
+    if(r>=0&&r<rows&&c>=0&&c<cols&&g[r][c]===null){
+      g[r][c]=pz.name;placed.add(pz.name);
+    }
   });
-  var left=remaining.filter(function(s){return!pplaced.has(s.name)&&!zplaced.has(s.name);});
-  var fr3=free.filter(function(s){return g[s.r-1][s.c-1]===null;});
+  /* 3) 짝 고정 */
+  shuffle(pairs.slice()).forEach(function(pair){
+    if(placed.has(pair.a)||placed.has(pair.b)) return;
+    var candidates=[];
+    for(var r=0;r<rows;r++){
+      for(var c=0;c<cols-1;c++){
+        if(g[r][c]===null&&g[r][c+1]===null) candidates.push([r,c,r,c+1]);
+      }
+    }
+    candidates=shuffle(candidates);
+    if(candidates.length){
+      var p=candidates[0];
+      g[p[0]][p[1]]=pair.a;g[p[2]][p[3]]=pair.b;
+      placed.add(pair.a);placed.add(pair.b);
+    }
+  });
+  /* 4) 다중 셀 선호구역 (랜덤) */
+  shuffle(prefZones.slice()).forEach(function(pz){
+    if(pz.cells.length<=1||placed.has(pz.name)) return;
+    var cellSet=new Set(pz.cells);
+    var zoneFree=[];
+    for(var r=0;r<rows;r++){
+      for(var c=0;c<cols;c++){
+        if(g[r][c]===null&&cellSet.has((c+1)+'-'+(r+1))) zoneFree.push({r,c});
+      }
+    }
+    if(zoneFree.length){
+      var pick=zoneFree[Math.floor(Math.random()*zoneFree.length)];
+      g[pick.r][pick.c]=pz.name;
+      placed.add(pz.name);
+    }
+  });
+  /* 5) 나머지 랜덤 + 남녀 분리 */
+  var left=shuffle(active.filter(function(s){return!placed.has(s.name);}));
+  var freeIdx=[];
+  for(var r=0;r<rows;r++) for(var c=0;c<cols;c++) if(g[r][c]===null) freeIdx.push({r,c});
+  freeIdx=shuffle(freeIdx);
   if(genderSep){
-    var males=left.filter(function(s){return s.gender==='M';}),females=left.filter(function(s){return s.gender!=='M';});
+    var males=left.filter(function(s){return s.gender==='M';});
+    var females=left.filter(function(s){return s.gender!=='M';});
     var half=Math.ceil(cols/2);
-    var lf=fr3.filter(function(s){return s.c<=half;}),rf=fr3.filter(function(s){return s.c>half;});
-    males.forEach(function(s,i){if(lf[i])g[lf[i].r-1][lf[i].c-1]=s;});
-    females.forEach(function(s,i){if(rf[i])g[rf[i].r-1][rf[i].c-1]=s;});
+    var leftHalf=freeIdx.filter(function(p){return (p.c+1)<=half;});
+    var rightHalf=freeIdx.filter(function(p){return (p.c+1)>half;});
+    while(leftHalf.length<males.length&&rightHalf.length>0) leftHalf.push(rightHalf.pop());
+    while(rightHalf.length<females.length&&leftHalf.length>0) rightHalf.push(leftHalf.pop());
+    males.forEach(function(s,i){if(leftHalf[i]) g[leftHalf[i].r][leftHalf[i].c]=s;});
+    females.forEach(function(s,i){if(rightHalf[i]) g[rightHalf[i].r][rightHalf[i].c]=s;});
   } else {
-    left.forEach(function(s,i){if(fr3[i])g[fr3[i].r-1][fr3[i].c-1]=s;});
+    left.forEach(function(s,i){if(freeIdx[i]) g[freeIdx[i].r][freeIdx[i].c]=s;});
   }
+  /* 학생 객체 → name 기반 통일 (placed에 들어간 것은 이름 문자열) */
+  /* 단, 셀에 '학생 객체'와 '이름 문자열'이 섞여 있을 수 있음 → 렌더링/평가 시 처리 */
   return g;
 }
 function evalScore(g,active,rows,cols){
-  var sc=Math.random()*.3;
+  var sc=Math.random()*0.3;
+  /* 미배치 학생 큰 감점 */
+  var placedNames=new Set();
+  for(var r=0;r<rows;r++) for(var c=0;c<cols;c++){
+    var v=g[r][c];
+    if(v&&v!=='EMPTY'){var nm=typeof v==='object'?v.name:v;placedNames.add(nm);}
+  }
+  var unplaced=active.filter(function(s){return!placedNames.has(s.name);}).length;
+  sc-=unplaced*100;
+  /* 짝 위반 */
+  pairs.forEach(function(pair){
+    var pA=findPos(g,pair.a,rows,cols),pB=findPos(g,pair.b,rows,cols);
+    if(!pA||!pB){sc-=20;return;}
+    if(pA.r===pB.r&&Math.abs(pA.c-pB.c)===1) sc+=10; else sc-=15;
+  });
+  /* 선호 구역 */
+  prefZones.forEach(function(pz){
+    var p=findPos(g,pz.name,rows,cols);
+    if(!p){sc-=10;return;}
+    var cellSet=new Set(pz.cells);
+    if(cellSet.has((p.c+1)+'-'+(p.r+1))) sc+=8; else sc-=12;
+  });
+  /* 기피 거리 가산 */
   avoids.forEach(function(av){
     var pA=findPos(g,av.a,rows,cols),pB=findPos(g,av.b,rows,cols);
     if(!pA||!pB) return;
-    sc+=(Math.abs(pA.r-pB.r)+Math.abs(pA.c-pB.c))*av.level*.1;
+    sc+=(Math.abs(pA.r-pB.r)+Math.abs(pA.c-pB.c))*av.level*0.5;
   });
   return sc;
 }
