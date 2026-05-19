@@ -873,11 +873,15 @@ function evalScore(g,active,rows,cols){
     var cellSet=new Set(pz.cells);
     if(cellSet.has((p.c+1)+'-'+(p.r+1))) sc+=8; else sc-=12;
   });
-  /* 기피 거리 가산 */
+  /* 기피: 강도별 목표 거리 도달까지만 점수 부여 (대각선 양끝 쏠림 방지) */
   avoids.forEach(function(av){
     var pA=findPos(g,av.a,rows,cols),pB=findPos(g,av.b,rows,cols);
     if(!pA||!pB) return;
-    sc+=(Math.abs(pA.r-pB.r)+Math.abs(pA.c-pB.c))*av.level*0.5;
+    var dist=Math.abs(pA.r-pB.r)+Math.abs(pA.c-pB.c);
+    /* 약=2, 중=3, 강=대각선 최대 */
+    var target=av.level===1?2:av.level===2?3:(rows+cols);
+    if(dist>=target) sc+=5*av.level;            /* 목표 도달 = 보상 */
+    else            sc-=(target-dist)*3*av.level; /* 미달 = 차이만큼 감점 */
   });
   return sc;
 }
